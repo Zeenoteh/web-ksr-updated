@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Virtual Share Market</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.22.9/Babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // Dummy data
+    const initialData = {
+      categories: [
+        {
+          name: "Bollywood Actors",
+          listings: [
+            { id: 1, name: "Shah Rukh Khan", price: 100, trend: [100, 102, 98, 105] },
+            { id: 2, name: "Salman Khan", price: 90, trend: [90, 88, 92, 90] },
+          ],
+        },
+        {
+          name: "YouTubers",
+          listings: [
+            { id: 3, name: "CarryMinati", price: 50, trend: [50, 52, 48, 55] },
+            { id: 4, name: "Technical Guruji", price: 45, trend: [45, 47, 46, 45] },
+          ],
+        },
+      ],
+    };
+
+    // Main App Component
+    function App() {
+      const [data, setData] = useState(initialData);
+      const [selectedCategory, setSelectedCategory] = useState(null);
+      const [showAdmin, setShowAdmin] = useState(false);
+
+      // Buy/Sell Logic (Mock)
+      const handleBuy = (categoryIndex, listingId) => {
+        setData((prev) => {
+          const newData = { ...prev };
+          const listing = newData.categories[categoryIndex].listings.find((l) => l.id === listingId);
+          listing.price += 5; // Price increase on buy
+          listing.trend.push(listing.price);
+          return newData;
+        });
+      };
+
+      const handleSell = (categoryIndex, listingId) => {
+        setData((prev) => {
+          const newData = { ...prev };
+          const listing = newData.categories[categoryIndex].listings.find((l) => l.id === listingId);
+          listing.price = Math.max(10, listing.price - 5); // Price decrease on sell, min 10
+          listing.trend.push(listing.price);
+          return newData;
+        });
+      };
+
+      // Admin: Add Category
+      const addCategory = (name) => {
+        setData((prev) => ({
+          ...prev,
+          categories: [...prev.categories, { name, listings: [] }],
+        }));
+      };
+
+      // Admin: Add Listing
+      const addListing = (categoryIndex, name, price) => {
+        setData((prev) => {
+          const newData = { ...prev };
+          newData.categories[categoryIndex].listings.push({
+            id: Date.now(),
+            name,
+            price,
+            trend: [price],
+          });
+          return newData;
+        });
+      };
+
+      return (
+        <div className="min-h-screen bg-gray-100 p-4">
+          <h1 className="text-3xl font-bold text-center mb-4">Virtual Share Market</h1>
+          <button
+            className="mb-4 bg-blue-500 text-white px-4 py-2 rounded"
+            onClick={() => setShowAdmin(!showAdmin)}
+          >
+            {showAdmin ? "Hide Admin Panel" : "Show Admin Panel"}
+          </button>
+
+          {showAdmin && <AdminPanel addCategory={addCategory} addListing={addListing} data={data} />}
+
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold">Categories</h2>
+            <div className="flex gap-2">
+              {data.categories.map((category, index) => (
+                <button
+                  key={index}
+                  className={`px-4 py-2 rounded ${
+                    selectedCategory === index ? "bg-blue-500 text-white" : "bg-gray-200"
+                  }`}
+                  onClick={() => setSelectedCategory(index)}
+                >
+                  {category.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {selectedCategory !== null && (
+            <CategoryView
+              category={data.categories[selectedCategory]}
+              categoryIndex={selectedCategory}
+              handleBuy={handleBuy}
+              handleSell={handleSell}
+            />
+          )}
+        </div>
+      );
+    }
+
+    // Category View Component
+    function CategoryView({ category, categoryIndex, handleBuy, handleSell }) {
+      const supreme = category.listings.reduce((prev, curr) =>
+        prev.price > curr.price ? prev : curr
+      , { price: 0 });
+
+      return (
+        <div>
+          <h2 className="text-xl font-semibold mb-2">{category.name}</h2>
+          <p className="mb-2">Supreme: {supreme.name} (₹{supreme.price})</p>
+          <div className="grid gap-4">
+            {category.listings.map((listing) => (
+              <div key={listing.id} className="bg-white p-4 rounded shadow">
+                <h3 className="text-lg font-semibold">{listing.name}</h3>
+                <p>Price: ₹{listing.price}</p>
+                <div className="flex gap-2 mt-2">
+                  <button
+                    className="bg-green-500 text-white px-4 py-2 rounded"
+                    onClick={() => handleBuy(categoryIndex, listing.id)}
+                  >
+                    Buy
+                  </button>
+                  <button
+                    className="bg-red-500 text-white px-4 py-2 rounded"
+                    onClick={() => handleSell(categoryIndex, listing.id)}
+                  >
+                    Sell
+                  </button>
+                </div>
+                <PriceChart trend={listing.trend} name={listing.name} />
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // Price Chart Component
+    function PriceChart({ trend, name }) {
+      const chartRef = React.useRef(null);
+      useEffect(() => {
+        const ctx = chartRef.current.getContext("2d");
+        const chart = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: trend.map((_, i) => `T${i + 1}`),
+            datasets: [
+              {
+                label: `Price Trend for ${name}`,
+                data: trend,
+                borderColor: "blue",
+                fill: false,
+              },
+            ],
+          },
+          options: { scales: { y: { beginAtZero: true } } },
+        });
+        return () => chart.destroy();
+      }, [trend, name]);
+
+      return <canvas ref={chartRef} className="mt-4" />;
+    }
+
+    // Admin Panel Component
+    function AdminPanel({ addCategory, addListing, data }) {
+      const [categoryName, setCategoryName] = useState("");
+      const [listingName, setListingName] = useState("");
+      const [listingPrice, setListingPrice] = useState("");
+      const [selectedCategory, setSelectedCategory] = useState(0);
+
+      const handleAddCategory = () => {
+        if (categoryName) {
+          addCategory(categoryName);
+          setCategoryName("");
+        }
+      };
+
+      const handleAddListing = () => {
+        if (listingName && listingPrice) {
+          addListing(selectedCategory, listingName, parseFloat(listingPrice));
+          setListingName("");
+          setListingPrice("");
+        }
+      };
+
+      return (
+        <div className="bg-white p-4 rounded shadow mb-4">
+          <h2 className="text-xl font-semibold mb-2">Admin Panel</h2>
+          <div className="mb-4">
+            <h3 className="text-lg">Add Category</h3>
+            <input
+              type="text"
+              value={categoryName}
+              onChange={(e) => setCategoryName(e.target.value)}
+              className="border p-2 rounded mr-2"
+              placeholder="Category Name"
+            />
+            <button
+              onClick={handleAddCategory}
+              className="bg-blue-500 text-white px-4 py-2 rounded"
+            >
+              Add
+            </button>
+          </div>
+          <div>
+            <h3 className="text-lg">Add Listing</h3>
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(parseInt(e.target.value))}
+              className="border p-2 rounded mr-2"
+            >
+              {data.categories.map((cat, index) => (
+                <option key={index} value={index}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={listingName}
+              onChange={(e) => setListingName(e.target.value)}
+              className="border p-2 rounded mr-2"
+              placeholder="Listing Name"
+            />
+            <input
+              type="number"
+              value={listingPrice}
+              onChange={(e) => setListingPrice(e.target.value)}
+              className="border p-2 rounded mr-2"
+              placeholder="Initial Price"
+            />
+            <button
+              onClick={handleAddListing}
+              className="bg-blue-500 text-white px-4 py-2 rounded"
+            >
+              Add
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // Render App
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App />);
+  </script>
+</body>
+</html>
